@@ -1,0 +1,11 @@
+[package]
+name = "atomic_once_cell"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+crossbeam-utils = "0.8.5"
+
+[target.'cfg(loom)'.dependencies]
+loom =  "0.5.4"
