@@ -2,7 +2,17 @@
 name = "atomic_once_cell"
 version = "0.1.0"
 edition = "2021"
-
+authors = ["Eivind Alexander Bergem <eivind.bergem@gmail.com>"]
+license = "MPL-2.0"
+description = "Thread-safe and lock-free OnceCell and Lazy"
+repository = "https://github.com/rustne-kretser/atomic_once_cell"
+readme = "README.md"
+categories = ["no-std", "concurrency"]
+keywords = ["lock-free", "no_std", "non-blocking", "atomic"]
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+]
 
 [dependencies]
 crossbeam-utils = "0.8.5"

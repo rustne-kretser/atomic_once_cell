@@ -1,4 +1,8 @@
-//! AtomicOnceCell provides two new types, [`AtomicOnceCell`] and
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! `atomic_once_cell` provides two new types, [`AtomicOnceCell`] and
 //! [`AtomicLazy`], which are thread-safe and lock-free versions of
 //! [`core::lazy::OnceCell`] and [`core::lazy::Lazy`].
 
