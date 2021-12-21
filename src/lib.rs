@@ -1,3 +1,5 @@
+//! Thread-safe cell which can be written to only once
+
 #![no_std]
 
 use core::{cell::UnsafeCell, sync::atomic::Ordering};
@@ -28,7 +30,26 @@ pub struct AtomicOnceCell<T> {
     state: AtomicU8,
 }
 
+/// A thread-safe cell which can be written to only once
+///
+/// Like `OnceCell`, but thread-safe.
+///
+/// # Examples
+///
+/// ```
+/// use atomic_once_cell::AtomicOnceCell;
+///
+/// let cell = AtomicOnceCell::new();
+/// assert!(cell.get().is_none());
+///
+/// let value: &String = cell.get_or_init(|| {
+///     "Hello, World!".to_string()
+/// });
+/// assert_eq!(value, "Hello, World!");
+/// assert!(cell.get().is_some());
+/// ```
 impl<T> AtomicOnceCell<T> {
+    /// Creates a new empty cell.
     #[cfg(not(loom))]
     pub const fn new() -> Self {
         Self {
@@ -59,6 +80,50 @@ impl<T> AtomicOnceCell<T> {
         &mut *self.cell.get()
     }
 
+    /// Gets the reference to the underlying value.
+    ///
+    /// Returns `None` if the cell is empty.
+    pub fn get(&self) -> Option<&T> {
+        if self.is_ready() {
+            let cell = unsafe { self.cell_mut() };
+
+            cell.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Gets the mutable reference to the underlying value.
+    ///
+    /// Returns `None` if the cell is empty.
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        if self.is_ready() {
+            self.cell.get_mut().as_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Sets the contents of the cell to `value`.
+    ///
+    /// # Errors
+    ///
+    /// This method returns `Ok(())` if the cell was empty and `Err(value)` if
+    /// it was full.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicOnceCell;
+    ///
+    /// let cell = AtomicOnceCell::new();
+    /// assert!(cell.get().is_none());
+    ///
+    /// assert_eq!(cell.set(92), Ok(()));
+    /// assert_eq!(cell.set(62), Err(62));
+    ///
+    /// assert!(cell.get().is_some());
+    /// ```
     pub fn set(&self, value: T) -> Result<(), T> {
         if self.update_state(State::Empty, State::Busy) {
             let cell = unsafe { self.cell_mut() };
@@ -73,16 +138,28 @@ impl<T> AtomicOnceCell<T> {
         }
     }
 
-    pub fn get(&self) -> Option<&T> {
-        if self.is_ready() {
-            let cell = unsafe { self.cell_mut() };
-
-            cell.as_ref()
-        } else {
-            None
-        }
-    }
-
+    /// Gets the contents of the cell, initializing it with `f`
+    /// if the cell was empty.
+    ///
+    /// # Panics
+    ///
+    /// If `f` panics, the panic is propagated to the caller, and the cell
+    /// remains uninitialized.
+    ///
+    /// It is an error to reentrantly initialize the cell from `f`. Doing
+    /// so results in a panic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicOnceCell;
+    ///
+    /// let cell = AtomicOnceCell::new();
+    /// let value = cell.get_or_init(|| 92);
+    /// assert_eq!(value, &92);
+    /// let value = cell.get_or_init(|| unreachable!());
+    /// assert_eq!(value, &92);
+    /// ```
     pub fn get_or_init<F>(&self, f: F) -> &T
     where
         F: FnOnce() -> T,
@@ -90,6 +167,32 @@ impl<T> AtomicOnceCell<T> {
         self.get_or_try_init::<_, ()>(|| Ok(f())).unwrap()
     }
 
+    /// Gets the contents of the cell, initializing it with `f` if
+    /// the cell was empty. If the cell was empty and `f` failed, an
+    /// error is returned.
+    ///
+    /// # Panics
+    ///
+    /// If `f` panics, the panic is propagated to the caller, and the cell
+    /// remains uninitialized.
+    ///
+    /// It is an error to reentrantly initialize the cell from `f`. Doing
+    /// so results in a panic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicOnceCell;
+    ///
+    /// let cell = AtomicOnceCell::new();
+    /// assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
+    /// assert!(cell.get().is_none());
+    /// let value = cell.get_or_try_init(|| -> Result<i32, ()> {
+    ///     Ok(92)
+    /// });
+    /// assert_eq!(value, Ok(&92));
+    /// assert_eq!(cell.get(), Some(&92))
+    /// ```
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
@@ -126,18 +229,43 @@ impl<T> AtomicOnceCell<T> {
         }
     }
 
+    /// Consumes the cell, returning the wrapped value.
+    ///
+    /// Returns `None` if the cell was empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicOnceCell;
+    ///
+    /// let cell: AtomicOnceCell<String> = AtomicOnceCell::new();
+    /// assert_eq!(cell.into_inner(), None);
+    ///
+    /// let cell = AtomicOnceCell::new();
+    /// cell.set("hello".to_string()).unwrap();
+    /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
+    /// ```
     pub fn into_inner(self) -> Option<T> {
         self.take()
     }
 
-    pub fn get_mut(&mut self) -> Option<&mut T> {
-        if self.is_ready() {
-            self.cell.get_mut().as_mut()
-        } else {
-            None
-        }
-    }
-
+    /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
+    ///
+    /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicOnceCell;
+    ///
+    /// let cell: AtomicOnceCell<String> = AtomicOnceCell::new();
+    /// assert_eq!(cell.take(), None);
+    ///
+    /// let cell = AtomicOnceCell::new();
+    /// cell.set("hello".to_string()).unwrap();
+    /// assert_eq!(cell.take(), Some("hello".to_string()));
+    /// assert_eq!(cell.get(), None);
+    /// ```
     pub fn take(&self) -> Option<T> {
         if self.update_state(State::Ready, State::Busy) {
             let cell = unsafe { self.cell_mut() };
