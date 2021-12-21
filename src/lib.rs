@@ -32,14 +32,7 @@ impl From<State> for u8 {
     }
 }
 
-pub struct AtomicOnceCell<T> {
-    cell: UnsafeCell<Option<T>>,
-    state: AtomicU8,
-}
-
-/// A thread-safe cell which can be written to only once
-///
-/// Like `OnceCell`, but thread-safe.
+/// A thread-safe cell which can be written to only once.
 ///
 /// # Examples
 ///
@@ -55,12 +48,62 @@ pub struct AtomicOnceCell<T> {
 /// assert_eq!(value, "Hello, World!");
 /// assert!(cell.get().is_some());
 /// ```
+pub struct AtomicOnceCell<T> {
+    inner: UnsafeCell<Option<T>>,
+    state: AtomicU8,
+}
+
+impl<T> Default for AtomicOnceCell<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for AtomicOnceCell<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.get() {
+            Some(v) => f.debug_tuple("AtomicOnceCell").field(v).finish(),
+            None => f.write_str("AtomicOnceCell(Uninit)"),
+        }
+    }
+}
+
+impl<T: Clone> Clone for AtomicOnceCell<T> {
+    fn clone(&self) -> AtomicOnceCell<T> {
+        let res = AtomicOnceCell::new();
+        if let Some(value) = self.get() {
+            match res.set(value.clone()) {
+                Ok(()) => (),
+                Err(_) => unreachable!(),
+            }
+        }
+        res
+    }
+}
+
+impl<T: PartialEq> PartialEq for AtomicOnceCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl<T: Eq> Eq for AtomicOnceCell<T> {}
+
+impl<T> From<T> for AtomicOnceCell<T> {
+    fn from(value: T) -> Self {
+        AtomicOnceCell {
+            inner: UnsafeCell::new(Some(value)),
+            state: AtomicU8::new(State::Ready.into()),
+        }
+    }
+}
+
 impl<T> AtomicOnceCell<T> {
     /// Creates a new empty cell.
     #[cfg(not(loom))]
     pub const fn new() -> Self {
         Self {
-            cell: UnsafeCell::new(None),
+            inner: UnsafeCell::new(None),
             state: AtomicU8::new(0),
         }
     }
@@ -68,7 +111,7 @@ impl<T> AtomicOnceCell<T> {
     #[cfg(loom)]
     pub fn new() -> Self {
         Self {
-            cell: UnsafeCell::new(None),
+            inner: UnsafeCell::new(None),
             state: AtomicU8::new(0),
         }
     }
@@ -84,7 +127,7 @@ impl<T> AtomicOnceCell<T> {
     }
 
     unsafe fn cell_mut(&self) -> &mut Option<T> {
-        &mut *self.cell.get()
+        &mut *self.inner.get()
     }
 
     /// Gets the reference to the underlying value.
@@ -105,7 +148,7 @@ impl<T> AtomicOnceCell<T> {
     /// Returns `None` if the cell is empty.
     pub fn get_mut(&mut self) -> Option<&mut T> {
         if self.is_ready() {
-            self.cell.get_mut().as_mut()
+            self.inner.get_mut().as_mut()
         } else {
             None
         }
@@ -260,6 +303,8 @@ impl<T> AtomicOnceCell<T> {
     /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
     ///
     /// Has no effect and returns `None` if the `OnceCell` hasn't been initialized.
+    ///
+    /// Safety is guaranteed by requiring a mutable reference.
     ///
     /// # Examples
     ///
