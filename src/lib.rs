@@ -1,8 +1,15 @@
-//! Thread-safe cell which can be written to only once
+//! AtomicOnceCell provides two new types, [`AtomicOnceCell`] and
+//! [`AtomicLazy`], which are thread-safe and lock-free versions of
+//! [`core::lazy::OnceCell`] and [`core::lazy::Lazy`].
 
 #![no_std]
 
-use core::{cell::UnsafeCell, sync::atomic::Ordering};
+use core::{
+    cell::{Cell, UnsafeCell},
+    fmt,
+    ops::Deref,
+    sync::atomic::Ordering,
+};
 use crossbeam_utils::Backoff;
 
 #[cfg(not(loom))]
@@ -283,6 +290,103 @@ impl<T> AtomicOnceCell<T> {
 
 unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
 
+/// A thread-safe value which is initialized on the first access.
+pub struct AtomicLazy<T, F = fn() -> T> {
+    cell: AtomicOnceCell<T>,
+    init: Cell<Option<F>>,
+}
+
+impl<T: fmt::Debug, F> fmt::Debug for AtomicLazy<T, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AtomicLazy")
+            .field("cell", &self.cell)
+            .field("init", &"..")
+            .finish()
+    }
+}
+
+impl<T: Default> Default for AtomicLazy<T> {
+    /// Creates a new lazy value using `Default` as the initializing function.
+    fn default() -> AtomicLazy<T> {
+        AtomicLazy::new(T::default)
+    }
+}
+
+unsafe impl<T, F> Sync for AtomicLazy<T, F>
+where
+    T: Send + Sync,
+    F: Send,
+{
+}
+
+impl<T, F> AtomicLazy<T, F> {
+    /// Creates a new lazy value with the given initializing function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn main() {
+    /// use atomic_once_cell::AtomicLazy;
+    ///
+    /// let hello = "Hello, World!".to_string();
+    ///
+    /// let lazy = AtomicLazy::new(|| hello.to_uppercase());
+    ///
+    /// assert_eq!(&*lazy, "HELLO, WORLD!");
+    /// # }
+    /// ```
+    #[cfg(not(loom))]
+    pub const fn new(f: F) -> Self {
+        Self {
+            cell: AtomicOnceCell::new(),
+            init: Cell::new(Some(f)),
+        }
+    }
+
+    #[cfg(loom)]
+    pub fn new(f: F) -> Self {
+        Self {
+            cell: AtomicOnceCell::new(),
+            init: Cell::new(Some(f)),
+        }
+    }
+}
+
+impl<T, F> AtomicLazy<T, F>
+where
+    F: FnOnce() -> T,
+{
+    /// Forces the evaluation of this lazy value and returns a reference to
+    /// the result.
+    ///
+    /// This is equivalent to the `Deref` impl, but is explicit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicLazy;
+    ///
+    /// let lazy = AtomicLazy::new(|| 92);
+    ///
+    /// assert_eq!(AtomicLazy::force(&lazy), &92);
+    /// assert_eq!(&*lazy, &92);
+    /// ```
+    pub fn force(this: &Self) -> &T {
+        this.cell.get_or_init(|| this.init.take().unwrap()())
+    }
+}
+
+impl<T, F> Deref for AtomicLazy<T, F>
+where
+    F: FnOnce() -> T,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        Self::force(self)
+    }
+}
+
 #[cfg(test)]
 #[macro_use]
 extern crate std;
@@ -290,11 +394,14 @@ extern crate std;
 #[cfg(test)]
 #[cfg(not(loom))]
 mod tests {
+    use core::sync::atomic::AtomicUsize;
     use std::thread;
 
     use std::vec::Vec;
 
     use std::boxed::Box;
+
+    use std::sync::Arc;
 
     use super::*;
 
@@ -377,6 +484,43 @@ mod tests {
                 assert_eq!(value, **cell.get().unwrap());
             }
         }
+    }
+
+    #[test]
+    fn lazy() {
+        let init = Cell::new(0);
+        let counter = AtomicLazy::new(|| {
+            init.set(init.get() + 1);
+            Cell::new(0)
+        });
+
+        for _ in 0..10 {
+            counter.set(counter.get() + 1);
+        }
+
+        assert_eq!(init.get(), 1);
+        assert_eq!(counter.get(), 10);
+    }
+
+    #[test]
+    fn lazy_threads() {
+        const N: usize = 100;
+        let counter = Arc::new(AtomicLazy::new(|| AtomicUsize::new(0)));
+
+        let handles: Vec<_> = (0..N)
+            .map(|_| {
+                let counter = counter.clone();
+                thread::spawn(move || {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(counter.load(Ordering::Relaxed), N);
     }
 }
 
@@ -469,6 +613,24 @@ mod loom_tests {
             for value in values {
                 assert_eq!(value, *cell.get().unwrap());
             }
+        });
+    }
+
+    #[test]
+    fn concurrent_lazy() {
+        loom::model(|| {
+            let lazy: &'static AtomicLazy<_, _> =
+                Box::leak(Box::new(AtomicLazy::new(|| AtomicU8::new(0))));
+
+            let handles: Vec<_> = (0..2)
+                .map(|_| thread::spawn(move || lazy.fetch_add(1, Ordering::AcqRel)))
+                .collect();
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
+
+            assert_eq!(lazy.load(Ordering::Relaxed), 2);
         });
     }
 }
