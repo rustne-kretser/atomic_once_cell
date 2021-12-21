@@ -246,7 +246,8 @@ impl<T> AtomicOnceCell<T> {
     /// assert_eq!(cell.into_inner(), Some("hello".to_string()));
     /// ```
     pub fn into_inner(self) -> Option<T> {
-        self.take()
+        let mut this = self;
+        this.take()
     }
 
     /// Takes the value out of this `OnceCell`, moving it back to an uninitialized state.
@@ -258,15 +259,15 @@ impl<T> AtomicOnceCell<T> {
     /// ```
     /// use atomic_once_cell::AtomicOnceCell;
     ///
-    /// let cell: AtomicOnceCell<String> = AtomicOnceCell::new();
+    /// let mut cell: AtomicOnceCell<String> = AtomicOnceCell::new();
     /// assert_eq!(cell.take(), None);
     ///
-    /// let cell = AtomicOnceCell::new();
+    /// let mut cell = AtomicOnceCell::new();
     /// cell.set("hello".to_string()).unwrap();
     /// assert_eq!(cell.take(), Some("hello".to_string()));
     /// assert_eq!(cell.get(), None);
     /// ```
-    pub fn take(&self) -> Option<T> {
+    pub fn take(&mut self) -> Option<T> {
         if self.update_state(State::Ready, State::Busy) {
             let cell = unsafe { self.cell_mut() };
             let item = cell.take();
@@ -299,7 +300,7 @@ mod tests {
 
     #[test]
     fn cell() {
-        let cell = AtomicOnceCell::new();
+        let mut cell = AtomicOnceCell::new();
 
         assert!(cell.get().is_none());
         assert!(cell.take().is_none());
@@ -373,7 +374,7 @@ mod tests {
 
         for value in values {
             if let Some(value) = value {
-                assert_eq!(value, *cell.take().unwrap());
+                assert_eq!(value, **cell.get().unwrap());
             }
         }
     }
@@ -415,14 +416,14 @@ mod loom_tests {
 
             for value in values {
                 if let Some(value) = value {
-                    assert_eq!(value, cell.take().unwrap());
+                    assert_eq!(value, *cell.get().unwrap());
                 }
             }
         });
     }
 
     #[test]
-    fn concurrent_set_take() {
+    fn concurrent_set_get() {
         loom::model(|| {
             let cell: &'static AtomicOnceCell<_> = Box::leak(Box::new(AtomicOnceCell::new()));
 
@@ -430,18 +431,18 @@ mod loom_tests {
                 cell.set(42).unwrap();
             });
 
-            let taker = thread::spawn(|| cell.take());
+            let getter = thread::spawn(|| cell.get());
 
             setter.join().unwrap();
 
-            let value = if let Some(value) = taker.join().unwrap() {
-                assert!(cell.take().is_none());
+            let value = if let Some(value) = getter.join().unwrap() {
+                assert_eq!(cell.get(), Some(value));
                 value
             } else {
-                cell.take().unwrap()
+                cell.get().unwrap()
             };
 
-            assert_eq!(value, 42);
+            assert_eq!(*value, 42);
         });
     }
 
