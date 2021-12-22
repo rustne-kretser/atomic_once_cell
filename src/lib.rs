@@ -195,6 +195,11 @@ impl<T> AtomicOnceCell<T> {
     /// Gets the contents of the cell, initializing it with `f`
     /// if the cell was empty.
     ///
+    /// # Blocking
+    ///
+    /// This method might block and should not be used from an
+    /// interrupt handler.
+    ///
     /// # Panics
     ///
     /// If `f` panics, the panic is propagated to the caller, and the cell
@@ -224,6 +229,11 @@ impl<T> AtomicOnceCell<T> {
     /// Gets the contents of the cell, initializing it with `f` if
     /// the cell was empty. If the cell was empty and `f` failed, an
     /// error is returned.
+    ///
+    /// # Blocking
+    ///
+    /// This method might block and should not be used from an
+    /// interrupt handler.
     ///
     /// # Panics
     ///
@@ -340,6 +350,28 @@ impl<T> AtomicOnceCell<T> {
 unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
 
 /// A thread-safe value which is initialized on the first access.
+///
+/// # Blocking
+///
+/// Calling [`AtomicLazy::force()`] – directly or through `Deref`
+/// – might block and should not be called from an interrupt
+/// handler. To use `AtomicLazy` in an interrupt handler, the
+/// following pattern is recommended:
+///
+/// ```ignore
+/// static ITEM: AtomicOnceCell<Item> = AtomicOnceCell::new();
+///
+/// fn interrupt_handler() {
+///     let item = ITEM.get().unwrap_or_else(|| unreachable!());
+///     [...]
+/// }
+///
+/// fn main() {
+///     ITEM.init();
+///     // <- Enable interrupt here
+///     [...]
+/// }
+
 pub struct AtomicLazy<T, F = fn() -> T> {
     cell: AtomicOnceCell<T>,
     init: Cell<Option<F>>,
@@ -410,6 +442,11 @@ where
     ///
     /// This is equivalent to the `Deref` impl, but is explicit.
     ///
+    /// # Blocking
+    ///
+    /// This method might block and should not be used from an
+    /// interrupt handler.
+    ///
     /// # Examples
     ///
     /// ```
@@ -422,6 +459,41 @@ where
     /// ```
     pub fn force(this: &Self) -> &T {
         this.cell.get_or_init(|| this.init.take().unwrap()())
+    }
+
+    /// Like [`AtomicLazy::force()`], but without returing a reference.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicLazy;
+    ///
+    /// let lazy = AtomicLazy::new(|| 92);
+    ///
+    /// AtomicLazy::init(&lazy);
+    /// assert_eq!(&*lazy, &92);
+    /// ```
+    pub fn init(this: &Self) {
+        Self::force(this);
+    }
+
+    /// Gets the reference to the underlying value.
+    ///
+    /// Returns `None` if the cell is not initialized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use atomic_once_cell::AtomicLazy;
+    ///
+    /// let lazy = AtomicLazy::new(|| 92);
+    ///
+    /// assert_eq!(AtomicLazy::get(&lazy), None);
+    /// assert_eq!(AtomicLazy::force(&lazy), &92);
+    /// assert_eq!(AtomicLazy::get(&lazy), Some(&92));
+    /// ```
+    pub fn get(this: &Self) -> Option<&T> {
+        this.cell.get()
     }
 }
 
