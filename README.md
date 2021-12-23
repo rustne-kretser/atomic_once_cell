@@ -53,7 +53,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-atomic_once_cell = "0.1.1"
+atomic_once_cell = "0.1.2"
 ```
 
 # License
