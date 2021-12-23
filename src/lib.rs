@@ -358,18 +358,24 @@ unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
 /// handler. To use `AtomicLazy` in an interrupt handler, the
 /// following pattern is recommended:
 ///
-/// ```ignore
-/// static ITEM: AtomicLazy<Item> = AtomicLazy::new();
+/// ```
+/// use atomic_once_cell::AtomicLazy;
+///
+/// static LAZY: AtomicLazy<String> = AtomicLazy::new(|| "Hello, World!".to_owned());
 ///
 /// fn interrupt_handler() {
-///     let item = ITEM.get().unwrap_or_else(|| unreachable!());
-///     [...]
+///     let item = AtomicLazy::get(&LAZY).unwrap_or_else(|| unreachable!());
+///     assert_eq!(*item, "Hello, World!");
+///     // [...]
 /// }
 ///
 /// fn main() {
-///     ITEM.init();
-///     // <- Enable interrupt here
-///     [...]
+///     AtomicLazy::init(&LAZY);
+///     assert_eq!(*LAZY, "Hello, World!");
+///     // [...] <- Enable interrupt here
+///     interrupt_handler(); // interrupt handler called
+///                          // asynchronously at some point
+///     // [...]
 /// }
 
 pub struct AtomicLazy<T, F = fn() -> T> {
