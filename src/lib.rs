@@ -4,7 +4,44 @@
 
 //! `atomic_once_cell` provides two new types, [`AtomicOnceCell`] and
 //! [`AtomicLazy`], which are thread-safe and lock-free versions of
-//! [`core::lazy::OnceCell`] and [`core::lazy::Lazy`].
+//! [`core::lazy::OnceCell`] and [`core::lazy::Lazy`] suitable for use
+//! in `#[no_std]` environments.
+//!
+//! ## Blocking
+//!
+//! Both types can be used in a non-blocking way, but there are some
+//! blocking calls that should not be used from interrupt handlers or
+//! other contexts where blocking will lead to a deadlock. Blocking is
+//! based on
+//! [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
+//! and will be reduced to a spin lock in `#[no_std]` environments.
+//!
+//! ## Examples
+//! ### `AtomicOnceCell`
+//!
+//! ```
+//! use atomic_once_cell::AtomicOnceCell;
+//!
+//! static CELL: AtomicOnceCell<String> = AtomicOnceCell::new();
+//!
+//! fn main() {
+//!     CELL.set("Hello, World!".to_owned()).unwrap();
+//!
+//!     assert_eq!(*CELL.get().unwrap(), "Hello, World!");
+//! }
+//! ```
+//!
+//! ### `AtomicLazy`
+//!
+//! ```
+//! use atomic_once_cell::AtomicLazy;
+//!
+//! static LAZY: AtomicLazy<String> = AtomicLazy::new(|| "Hello, World!".to_owned());
+//!
+//! fn main() {
+//!     assert_eq!(*LAZY, "Hello, World!");
+//! }
+//! ```
 
 #![no_std]
 
@@ -198,7 +235,10 @@ impl<T> AtomicOnceCell<T> {
     /// # Blocking
     ///
     /// This method might block and should not be used from an
-    /// interrupt handler.
+    /// interrupt handler. Blocking is based on
+    /// [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
+    /// and will be reduced to a spin lock in `#[no_std]`
+    /// environments.
     ///
     /// # Panics
     ///
@@ -233,7 +273,10 @@ impl<T> AtomicOnceCell<T> {
     /// # Blocking
     ///
     /// This method might block and should not be used from an
-    /// interrupt handler.
+    /// interrupt handler. Blocking is based on
+    /// [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
+    /// and will be reduced to a spin lock in `#[no_std]`
+    /// environments.
     ///
     /// # Panics
     ///
@@ -358,18 +401,24 @@ unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
 /// handler. To use `AtomicLazy` in an interrupt handler, the
 /// following pattern is recommended:
 ///
-/// ```ignore
-/// static ITEM: AtomicOnceCell<Item> = AtomicOnceCell::new();
+/// ```
+/// use atomic_once_cell::AtomicLazy;
+///
+/// static LAZY: AtomicLazy<String> = AtomicLazy::new(|| "Hello, World!".to_owned());
 ///
 /// fn interrupt_handler() {
-///     let item = ITEM.get().unwrap_or_else(|| unreachable!());
-///     [...]
+///     let item = AtomicLazy::get(&LAZY).unwrap_or_else(|| unreachable!());
+///     assert_eq!(*item, "Hello, World!");
+///     // [...]
 /// }
 ///
 /// fn main() {
-///     ITEM.init();
-///     // <- Enable interrupt here
-///     [...]
+///     AtomicLazy::init(&LAZY);
+///     assert_eq!(*LAZY, "Hello, World!");
+///     // [...] <- Enable interrupt here
+///     interrupt_handler(); // interrupt handler called
+///                          // asynchronously at some point
+///     // [...]
 /// }
 
 pub struct AtomicLazy<T, F = fn() -> T> {
@@ -445,7 +494,10 @@ where
     /// # Blocking
     ///
     /// This method might block and should not be used from an
-    /// interrupt handler.
+    /// interrupt handler. Blocking is based on
+    /// [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
+    /// and will be reduced to a spin lock in `#[no_std]`
+    /// environments.
     ///
     /// # Examples
     ///

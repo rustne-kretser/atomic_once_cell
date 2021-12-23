@@ -16,6 +16,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: cargo-readme
+        version: latest
+        use-tool-cache: true
+    - name: Readme
+      run: cargo readme > README.md && git diff --exit-code
     - name: Format
       run: cargo fmt --all -- --check
     - name: Build
