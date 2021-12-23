@@ -359,7 +359,7 @@ unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
 /// following pattern is recommended:
 ///
 /// ```ignore
-/// static ITEM: AtomicOnceCell<Item> = AtomicOnceCell::new();
+/// static ITEM: AtomicLazy<Item> = AtomicLazy::new();
 ///
 /// fn interrupt_handler() {
 ///     let item = ITEM.get().unwrap_or_else(|| unreachable!());
