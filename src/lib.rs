@@ -159,7 +159,7 @@ impl<T> AtomicOnceCell<T> {
 
     fn update_state(&self, old: State, new: State) -> bool {
         self.state
-            .compare_exchange_weak(old.into(), new.into(), Ordering::AcqRel, Ordering::Relaxed)
+            .compare_exchange(old.into(), new.into(), Ordering::AcqRel, Ordering::Relaxed)
             .is_ok()
     }
 

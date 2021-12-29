@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added miri test.
 
+### Fixed
+- Uncovered by miri: Use `compare_exchange()` instead of
+  `compare_exchange_weak()`, because the latter can spuriously fail.
+
 ## [0.1.2] - 2021-12-23
 ### Added
 - Top-level documentation.
