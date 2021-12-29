@@ -159,7 +159,7 @@ impl<T> AtomicOnceCell<T> {
 
     fn update_state(&self, old: State, new: State) -> bool {
         self.state
-            .compare_exchange_weak(old.into(), new.into(), Ordering::AcqRel, Ordering::Relaxed)
+            .compare_exchange(old.into(), new.into(), Ordering::AcqRel, Ordering::Relaxed)
             .is_ok()
     }
 
@@ -630,10 +630,12 @@ mod tests {
 
     #[test]
     fn threads() {
-        let cell: &'static AtomicOnceCell<_> = Box::leak(Box::new(AtomicOnceCell::new()));
+        let cell = Arc::new(AtomicOnceCell::new());
 
         let handles: Vec<_> = (0..10)
             .map(|i| {
+                let cell = cell.clone();
+
                 thread::spawn(move || {
                     let value = Box::new(i);
                     let res = cell.set(value);
@@ -664,15 +666,15 @@ mod tests {
         let init = Cell::new(0);
         let counter = AtomicLazy::new(|| {
             init.set(init.get() + 1);
-            Cell::new(0)
+            AtomicUsize::new(0)
         });
 
         for _ in 0..10 {
-            counter.set(counter.get() + 1);
+            counter.fetch_add(1, Ordering::Relaxed);
         }
 
         assert_eq!(init.get(), 1);
-        assert_eq!(counter.get(), 10);
+        assert_eq!(counter.load(Ordering::Relaxed), 10);
     }
 
     #[test]
