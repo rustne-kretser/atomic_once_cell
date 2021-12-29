@@ -630,10 +630,12 @@ mod tests {
 
     #[test]
     fn threads() {
-        let cell: &'static AtomicOnceCell<_> = Box::leak(Box::new(AtomicOnceCell::new()));
+        let cell = Arc::new(AtomicOnceCell::new());
 
         let handles: Vec<_> = (0..10)
             .map(|i| {
+                let cell = cell.clone();
+
                 thread::spawn(move || {
                     let value = Box::new(i);
                     let res = cell.set(value);
