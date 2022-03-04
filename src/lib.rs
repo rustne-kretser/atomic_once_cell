@@ -263,7 +263,8 @@ impl<T> AtomicOnceCell<T> {
     where
         F: FnOnce() -> T,
     {
-        self.get_or_try_init::<_, ()>(|| Ok(f())).unwrap()
+        self.get_or_try_init::<_, ()>(|| Ok(f()))
+            .unwrap_or_else(|_| unreachable!())
     }
 
     /// Gets the contents of the cell, initializing it with `f` if
@@ -323,10 +324,8 @@ impl<T> AtomicOnceCell<T> {
         let backoff = Backoff::new();
 
         loop {
-            let value = self.get();
-
-            if value.is_some() {
-                break Ok(value.unwrap());
+            if let Some(value) = self.get() {
+                break Ok(value);
             }
 
             backoff.spin();
