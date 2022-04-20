@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Use `atomic-polyfill` to support targets without CAS or atomic load/store.
+
 ## [0.1.3] - 2022-03-04
 ### Added
 - Added miri test.

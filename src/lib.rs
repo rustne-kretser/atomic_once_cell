@@ -3,18 +3,21 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! `atomic_once_cell` provides two new types, [`AtomicOnceCell`] and
-//! [`AtomicLazy`], which are thread-safe and lock-free versions of
-//! [`core::lazy::OnceCell`] and [`core::lazy::Lazy`] suitable for use
-//! in `#[no_std]` environments.
+//! [`AtomicLazy`], which are thread-safe and mostly lock-free drop-in
+//! replacements of [`core::lazy::OnceCell`] and [`core::lazy::Lazy`]
+//! suitable for use in `#[no_std]` environments.
 //!
 //! ## Blocking
+//!
+//! Because dereferencing [`AtomicLazy`] can't fail, it can't be
+//! lock-free (if you know a way, please tell me).
 //!
 //! Both types can be used in a non-blocking way, but there are some
 //! blocking calls that should not be used from interrupt handlers or
 //! other contexts where blocking will lead to a deadlock. Blocking is
 //! based on
 //! [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
-//! and will be reduced to a spin lock in `#[no_std]` environments.
+//! and will be reduced to a spinlock in `#[no_std]` environments.
 //!
 //! ## Examples
 //! ### `AtomicOnceCell`
@@ -54,7 +57,7 @@ use core::{
 use crossbeam_utils::Backoff;
 
 #[cfg(not(loom))]
-use core::sync::atomic::AtomicU8;
+use atomic_polyfill::AtomicU8;
 
 #[cfg(loom)]
 use loom::sync::atomic::AtomicU8;
