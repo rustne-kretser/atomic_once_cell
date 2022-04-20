@@ -54,7 +54,7 @@ use core::{
 use crossbeam_utils::Backoff;
 
 #[cfg(not(loom))]
-use core::sync::atomic::AtomicU8;
+use atomic_polyfill::AtomicU8;
 
 #[cfg(loom)]
 use loom::sync::atomic::AtomicU8;
