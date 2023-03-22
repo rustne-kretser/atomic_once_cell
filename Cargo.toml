@@ -16,7 +16,7 @@ include = [
 
 [dependencies]
 atomic-polyfill = "0.1.8"
-crossbeam-utils = "0.8.5"
+crossbeam-utils = { version = "0.8.5", default-features = false }
 
 [target.'cfg(loom)'.dependencies]
 loom =  "0.5.4"
