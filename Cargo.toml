@@ -1,6 +1,6 @@
 [package]
 name = "atomic_once_cell"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Eivind Alexander Bergem <eivind.bergem@gmail.com>"]
 license = "MPL-2.0"

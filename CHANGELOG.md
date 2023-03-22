@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+
+## [0.1.4] - 2023-03-22
+### Changed
 - Use `atomic-polyfill` to support targets without CAS or atomic load/store.
+- Make crossbeam-utils dep default-features = false to allow building without std
 
 ## [0.1.3] - 2022-03-04
 ### Added
