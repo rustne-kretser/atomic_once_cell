@@ -170,6 +170,10 @@ impl<T> AtomicOnceCell<T> {
         self.state.load(Ordering::Acquire) == State::Ready.into()
     }
 
+    unsafe fn cell(&self) -> &Option<T> {
+        &*self.inner.get()
+    }
+
     unsafe fn cell_mut(&self) -> &mut Option<T> {
         &mut *self.inner.get()
     }
@@ -179,7 +183,7 @@ impl<T> AtomicOnceCell<T> {
     /// Returns `None` if the cell is empty.
     pub fn get(&self) -> Option<&T> {
         if self.is_ready() {
-            let cell = unsafe { self.cell_mut() };
+            let cell = unsafe { self.cell() };
 
             cell.as_ref()
         } else {
