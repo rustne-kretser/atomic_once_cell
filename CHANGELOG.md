@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.1.5] - 2023-03-25
+### Fixed
 - Use immutable reference in `AtomicOnceCell` to keep miri happy.
 
 ## [0.1.4] - 2023-03-22
