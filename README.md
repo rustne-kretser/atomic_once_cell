@@ -56,7 +56,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-atomic_once_cell = "0.1.4"
+atomic_once_cell = "0.1.5"
 ```
 
 # License
