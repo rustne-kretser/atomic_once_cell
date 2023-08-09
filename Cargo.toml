@@ -17,6 +17,14 @@ include = [
 [dependencies]
 atomic-polyfill = "1.0.2"
 crossbeam-utils = { version = "0.8.15", default-features = false }
+serde = { version = "1.0.171", optional = true }
 
 [target.'cfg(loom)'.dependencies]
 loom =  "0.5.6"
+
+[dev-dependencies]
+serde_json = "1.0.104"
+
+[features]
+default = []
+serde = ["dep:serde"]

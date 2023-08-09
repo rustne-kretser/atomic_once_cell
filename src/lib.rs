@@ -62,6 +62,9 @@ use atomic_polyfill::AtomicU8;
 #[cfg(loom)]
 use loom::sync::atomic::AtomicU8;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[repr(u8)]
 #[derive(Eq, PartialEq)]
 enum State {
@@ -167,7 +170,7 @@ impl<T> AtomicOnceCell<T> {
     }
 
     fn is_ready(&self) -> bool {
-        self.state.load(Ordering::Acquire) == State::Ready.into()
+        self.state.load(Ordering::Acquire) == State::Ready as u8
     }
 
     unsafe fn cell(&self) -> &Option<T> {
@@ -397,6 +400,26 @@ impl<T> AtomicOnceCell<T> {
 }
 
 unsafe impl<T> Sync for AtomicOnceCell<T> where T: Send + Sync {}
+
+#[cfg(feature = "serde")]
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for AtomicOnceCell<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(Self::from)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: Serialize> Serialize for AtomicOnceCell<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.get().serialize(serializer)
+    }
+}
 
 /// A thread-safe value which is initialized on the first access.
 ///
@@ -813,5 +836,23 @@ mod loom_tests {
 
             assert_eq!(lazy.load(Ordering::Relaxed), 2);
         });
+    }
+}
+
+#[cfg(test)]
+mod serde_tests {
+    #[test]
+    #[cfg(feature = "serde")]
+    fn cell_serde() {
+        use crate::AtomicOnceCell;
+
+        let cell = AtomicOnceCell::new();
+        let value = 10;
+        assert!(cell.set(value).is_ok());
+
+        let serialized = serde_json::to_string(&cell).unwrap();
+        let deserialized = serde_json::from_str::<AtomicOnceCell<usize>>(&serialized).unwrap();
+
+        assert_eq!(*deserialized.get().unwrap(), value);
     }
 }
