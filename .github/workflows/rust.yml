@@ -38,6 +38,8 @@ jobs:
       run: cargo test --verbose
     - name: Run loom tests
       run: RUSTFLAGS="--cfg loom" cargo test --release loom_tests
+    - name: Run serde tests
+      run: cargo test --release serde_tests --features=serde
 
   miri-test:
     runs-on: ubuntu-latest
