@@ -407,7 +407,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for AtomicOnceCell<T> {
     where
         D: serde::Deserializer<'de>,
     {
-        T::deserialize(deserializer).map(Self::from)
+        // deserialize the inner value
+        let inner_value = Option::<T>::deserialize(deserializer)?;
+
+        // if the inner value is Some, then return AtomicRefCell with the inner value, otherwise return an empty AtomicRefCell
+        match inner_value {
+            Some(inner_value) => Ok(Self::from(inner_value)),
+            None => Ok(Self::default()),
+        }
     }
 }
 
@@ -847,6 +854,12 @@ mod serde_tests {
         use crate::AtomicOnceCell;
 
         let cell = AtomicOnceCell::new();
+
+        let empty_serialized = serde_json::to_string(&cell).unwrap();
+        let empty_deserialized =
+            serde_json::from_str::<AtomicOnceCell<usize>>(&empty_serialized).unwrap();
+        assert_eq!(empty_deserialized.get(), None);
+
         let value = 10;
         assert!(cell.set(value).is_ok());
 
