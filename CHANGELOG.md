@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add `crossbeam` feature, enabled by default, to enable `crossbeam-utils` dependency and `AtomicLazy` struct.
+
 ## [0.2.0] - 2025-02-13
 
 ### Fixed

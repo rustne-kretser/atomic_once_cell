@@ -15,9 +15,10 @@
 //! Both types can be used in a non-blocking way, but there are some
 //! blocking calls that should not be used from interrupt handlers or
 //! other contexts where blocking will lead to a deadlock. Blocking is
-//! based on
-//! [`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
-//! and will be reduced to a spinlock in `#[no_std]` environments.
+//! based on [`crossbeam::utils::Backoff`] and will be reduced to a spinlock
+//! in `#[no_std]` environments. This is enabled via `crossbeam` feature.
+//!
+//! [`crossbeam::utils::Backoff`]: https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html,
 //!
 //! ## Examples
 //! ### `AtomicOnceCell`
@@ -48,13 +49,13 @@
 
 #![no_std]
 
-use core::{
-    cell::{Cell, UnsafeCell},
-    fmt,
-    ops::Deref,
-    sync::atomic::Ordering,
+use core::{cell::UnsafeCell, fmt, sync::atomic::Ordering};
+
+#[cfg(feature = "crossbeam")]
+use {
+    core::{cell::Cell, ops::Deref},
+    crossbeam_utils::Backoff,
 };
-use crossbeam_utils::Backoff;
 
 #[cfg(not(loom))]
 use portable_atomic::AtomicU8;
@@ -269,6 +270,7 @@ impl<T> AtomicOnceCell<T> {
     /// let value = cell.get_or_init(|| unreachable!());
     /// assert_eq!(value, &92);
     /// ```
+    #[cfg(feature = "crossbeam")]
     pub fn get_or_init<F>(&self, f: F) -> &T
     where
         F: FnOnce() -> T,
@@ -311,6 +313,7 @@ impl<T> AtomicOnceCell<T> {
     /// assert_eq!(value, Ok(&92));
     /// assert_eq!(cell.get(), Some(&92))
     /// ```
+    #[cfg(feature = "crossbeam")]
     pub fn get_or_try_init<F, E>(&self, f: F) -> Result<&T, E>
     where
         F: FnOnce() -> Result<T, E>,
@@ -456,12 +459,13 @@ impl<T: Serialize> Serialize for AtomicOnceCell<T> {
 ///                          // asynchronously at some point
 ///     // [...]
 /// }
-
+#[cfg(feature = "crossbeam")]
 pub struct AtomicLazy<T, F = fn() -> T> {
     cell: AtomicOnceCell<T>,
     init: Cell<Option<F>>,
 }
 
+#[cfg(feature = "crossbeam")]
 impl<T: fmt::Debug, F> fmt::Debug for AtomicLazy<T, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AtomicLazy")
@@ -471,6 +475,7 @@ impl<T: fmt::Debug, F> fmt::Debug for AtomicLazy<T, F> {
     }
 }
 
+#[cfg(feature = "crossbeam")]
 impl<T: Default> Default for AtomicLazy<T> {
     /// Creates a new lazy value using `Default` as the initializing function.
     fn default() -> AtomicLazy<T> {
@@ -478,6 +483,7 @@ impl<T: Default> Default for AtomicLazy<T> {
     }
 }
 
+#[cfg(feature = "crossbeam")]
 unsafe impl<T, F> Sync for AtomicLazy<T, F>
 where
     T: Send + Sync,
@@ -485,6 +491,7 @@ where
 {
 }
 
+#[cfg(feature = "crossbeam")]
 impl<T, F> AtomicLazy<T, F> {
     /// Creates a new lazy value with the given initializing function.
     ///
@@ -518,6 +525,7 @@ impl<T, F> AtomicLazy<T, F> {
     }
 }
 
+#[cfg(feature = "crossbeam")]
 impl<T, F> AtomicLazy<T, F>
 where
     F: FnOnce() -> T,
@@ -585,6 +593,7 @@ where
     }
 }
 
+#[cfg(feature = "crossbeam")]
 impl<T, F> Deref for AtomicLazy<T, F>
 where
     F: FnOnce() -> T,
