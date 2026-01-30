@@ -17,9 +17,10 @@ lock-free (if you know a way, please tell me).
 Both types can be used in a non-blocking way, but there are some
 blocking calls that should not be used from interrupt handlers or
 other contexts where blocking will lead to a deadlock. Blocking is
-based on
-[`crossbeam::utils::Backoff`](https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html),
-and will be reduced to a spinlock in `#[no_std]` environments.
+based on [`crossbeam::utils::Backoff`] and will be reduced to a spinlock
+in `#[no_std]` environments. This is enabled via `crossbeam` feature.
+
+[`crossbeam::utils::Backoff`]: https://docs.rs/crossbeam/latest/crossbeam/utils/struct.Backoff.html,
 
 ### Examples
 #### `AtomicOnceCell`
